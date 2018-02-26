@@ -1,0 +1,82 @@
+#!/home/liqingjht/mybin/node
+
+/*
+purpose:
+  1. get multi files from 250
+  2. move files from /home/dnishare to working folder
+  3. highlight message when occur error
+*/
+
+const q = () => process.exit(1)
+
+function color(start, end) {
+	return  function() {
+		let str = `\x1B[${start}m`;
+		str += this;
+		str += `\x1B[${end}m`;
+		return str;
+	}
+}
+
+function initColors() {
+	let styles = {
+		red: [31, 39],
+		green: [32, 39],
+		yellow: [33, 39],
+		blue: [34, 39],
+		magenta: [35, 39],
+		cyan: [36, 39],
+		white: [37, 39],
+		gray: [90, 39],
+		grey: [90, 39]
+	}
+	for([key, [start, end]] of Object.entries(styles)) {
+		String.prototype[key] = color(start, end);
+	}
+}
+
+const argv = process.argv.slice(2);
+if(argv.length === 0) {
+	console.log("get usage (defeng.liu):\n\tget <file> ...");
+	q();
+}
+
+const {execSync} = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const username = require("os").userInfo().username;
+
+const cwd = process.cwd();
+const shareFolder = "/home/dnishare/";
+
+initColors();
+
+let files = fs.readdirSync(shareFolder);
+let exists = files.filter((f) => {return f.startsWith(`${username}_`)});
+
+for(let i=0; i<argv.length; i++) {
+	let task = argv[i];
+	try {
+		let out1 = execSync(`dnishare get "${task}"`);
+		let files = fs.readdirSync(shareFolder);
+		files = files.filter((f) => {
+			return (f.startsWith(`${username}_`) && !exists.includes(f))
+		});
+		if(files.length !== 1) {
+			throw new Error();
+		}
+		let fromPath = path.join(shareFolder, files[0]);
+		let toPath = path.join(cwd, task);
+		let stats = fs.statSync(fromPath);
+		if(stats.isDirectory()) {
+			execSync(`cp "${fromPath}" "${toPath}" -r`);
+		}
+		else {
+			execSync(`mv "${fromPath}" "${toPath}"`);
+		}
+		console.log(`>>> ${toPath}`.green());
+	}
+	catch(err) {
+		console.log(`>>> Occur error when get ${task}`.red());
+	}
+}

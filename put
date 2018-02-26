@@ -1,0 +1,114 @@
+#!/home/liiqngjht/mybin/node
+
+/*
+purpose:
+  1. share multi files
+  2. prevent share folder by accident
+  3. promtp confirm message when share c file
+  4. highlight message when occur error
+*/
+
+function question(ques) {
+	ques = ques.trim();
+	const readline = require("readline");
+	const rl = readline.createInterface({
+		input: process.stdin,
+		output: process.stdout
+	});
+
+	return new Promise((resolve) => {
+		rl.question(`${"<<<".red()} ${ques} `, (answer) => {
+			resolve(answer);
+			rl.close();
+		})
+	})
+}
+
+async function keyInYN(ques) {
+	ques = ques.trim();
+	ques = ques + (ques.endsWith('?')? '': '?') + " (Y/N) ";
+	let answer;
+	do {
+		answer = await question(ques);
+		answer = answer.trim().toUpperCase();
+	}
+	while(answer !== 'Y' && answer !== 'N')
+
+	return (answer === 'Y');
+}
+
+function color(start, end) {
+	return  function() {
+		let str = `\x1B[${start}m`;
+		str += this;
+		str += `\x1B[${end}m`;
+		return str;
+	}
+}
+
+function initColors() {
+	let styles = {
+		red: [31, 39],
+		green: [32, 39],
+		yellow: [33, 39],
+		blue: [34, 39],
+		magenta: [35, 39],
+		cyan: [36, 39],
+		white: [37, 39],
+		gray: [90, 39],
+		grey: [90, 39]
+	}
+	for([key, [start, end]] of Object.entries(styles)) {
+		String.prototype[key] = color(start, end);
+	}
+}
+
+(async function() {
+	initColors();
+	const argv = process.argv.slice(2);
+	if(argv.length === 0) {
+		console.log("put usage (defeng.liu):\n\tput <file> ...");
+		process.exit();
+	}
+
+	const {execSync} = require("child_process");
+	const path = require("path");
+	const fs = require("fs");
+
+	const cwd = process.cwd();
+
+	for(let i=0; i<argv.length; i++) {
+		try {
+			let sharePath = path.join(cwd, argv[i]);
+			let stats = fs.statSync(sharePath);
+			let ext = path.extname(sharePath);
+			if(stats.isDirectory()) {
+				if(await keyInYN(`${"[Folder]".yellow()} '${argv[i].cyan()}' Continue`) === false) {
+					continue;
+				}
+			}
+			else if(ext === ".c" || ext === ".h" || ext === "Makefile" || ext === "makefile") {
+				if(await keyInYN(`${"[C File]".yellow()} '${argv[i].cyan()}' Continue`) === false) {
+					continue;
+				}
+			}
+
+			let out = execSync(`dnishare "${sharePath}"`);
+			out = out.toString().split("\n").slice(-2)[0];
+			if(out.includes("Permission denied")) {
+				console.log(`>>> ${out}`.red());
+				return;
+			}
+
+			console.log(`>>> ${out}`.green());
+		}
+		catch(err) {
+			if(err.errno === -2) {
+				console.log(`>>> No such file or directory '${argv[i]}'`.red());
+			}
+			else {
+				console.log(`>>> ${err.message}`.red());
+			}
+		}
+	}
+})()
